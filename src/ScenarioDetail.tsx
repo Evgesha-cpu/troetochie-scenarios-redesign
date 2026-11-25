@@ -34,7 +34,7 @@ export function ScenarioDetail({ item, onClose, heading }: { item: Scenario; onC
       <div className="conversation-title"><MessageCircle size={18}/><h3>Пример переписки</h3><span>Демо</span></div>
       <div className="message incoming"><div className="role">Собеседник</div><p>{item.incoming}</p></div>
       <div className="message outgoing"><div className="role"><Mark/> Предлагаемый ответ</div><p>{item.reply}</p></div>
-      <div className="conversation-footer"><span>Подготовленный пример · адаптация</span><button className="text-button" onClick={() => void copy(item.reply, 'Ответ скопирован')}>{feedback === 'Ответ скопирован' ? <Check size={16}/> : <Copy size={16}/>} Копировать ответ</button></div>
+      <div className="conversation-footer"><button className="text-button" onClick={() => void copy(item.reply, 'Ответ скопирован')}>{feedback === 'Ответ скопирован' ? <Check size={16}/> : <Copy size={16}/>} Копировать ответ</button></div>
     </div>
     <div className="effect"><Sparkles size={18}/><div><h3>Что меняется в ответе</h3><p>{item.effect}</p></div></div>
     <div className="audience"><h3>Кому подойдёт</h3><p>{item.audience}</p><p className="voice">Тон в приложении · {item.voice === 'formal' ? 'Формальный' : 'Неформальный'}</p></div>

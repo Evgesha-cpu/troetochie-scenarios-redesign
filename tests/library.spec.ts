@@ -98,7 +98,7 @@ for (const width of [360, 390, 768, 1024, 1440]) {
 }
 
 test('mobile return preserves filters, focus and scroll', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 490 })
+  await page.setViewportSize({ width: 390, height: 405 })
   await page.goto('/?category=' + encodeURIComponent('С заказчиком') + '&q=срок')
   const card = page.locator('#card-postpone')
   await card.scrollIntoViewIfNeeded()
@@ -109,6 +109,45 @@ test('mobile return preserves filters, focus and scroll', async ({ page }) => {
   await page.getByRole('button', { name: 'Каталог', exact: true }).click()
   await expect(card).toBeFocused()
   await expect(page.getByRole('searchbox')).toHaveValue('срок')
-  await expect(page.getByRole('button', { name: 'С заказчиком' })).toHaveAttribute('aria-pressed', 'true')
   expect(await page.evaluate(() => window.scrollY)).toBe(before)
+  await expect(page.locator('#catalog-title')).toHaveText('С заказчиком')
+})
+
+for (const width of [390, 1440]) {
+  test('category panel and preserved filter at ' + width + ' px', async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/')
+    const panel = page.locator('#scenario-categories')
+    const toggle = page.locator('[aria-controls="scenario-categories"]')
+    await expect(toggle).toHaveAttribute('aria-expanded', String(width === 1440))
+    if (width === 390) await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await panel.getByRole('button', { name: 'Блогеры' }).click()
+    await expect(page.locator('.scenario-card')).toHaveCount(1)
+    if (width === 1440) await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(panel.getByRole('button', { name: 'Блогеры' })).toHaveCount(0)
+    await toggle.click()
+    await expect(panel.getByRole('button', { name: 'Блогеры' })).toHaveAttribute('aria-pressed', 'true')
+    await page.keyboard.press('Escape')
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(toggle).toBeFocused()
+  })
+}
+
+test('theme follows the system and remembers manual changes', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  const theme = page.getByRole('button', { name: 'Тёмная тема' })
+  await expect(theme).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('#scenario-title')).toBeVisible()
+  await expect(page.getByText('Подготовленный пример · адаптация')).toHaveCount(0)
+  await page.screenshot({ path: 'docs/screenshots/redesign-dark-1440.png' })
+  await theme.click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await page.reload()
+  await expect(theme).toHaveAttribute('aria-pressed', 'false')
+  await theme.click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 })

@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ArrowRight, ArrowUpRight, Briefcase, ChevronDown, Clapperboard, Gamepad2, Headphones, Heart, Layers3, MessageSquare, Search, Sparkles, UserRound, Users, X, type LucideIcon } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, Briefcase, Clapperboard, Gamepad2, Headphones, Heart, Layers3, MessageSquare, Moon, PanelLeftClose, PanelLeftOpen, Search, Sparkles, Sun, UserRound, Users, X, type LucideIcon } from 'lucide-react'
 import { categories, countLabel, matches, route, useCatalog, type Category, type Scenario } from './library'
 import { Mark, ScenarioDetail } from './ScenarioDetail'
 import './styles.css'
@@ -10,6 +10,17 @@ const categoryIcons: Record<Category, LucideIcon> = {
   'С HR': UserRound, 'Для поддержки': Headphones, 'С поддержкой': MessageSquare,
   'Аниме': Sparkles, 'Южный парк': Gamepad2, 'Кино': Clapperboard,
   'Известные личности': UserRound, 'Блогеры': MessageSquare,
+}
+
+const compactLayout = '(max-width: 900px)'
+const themeKey = 'troetochie-theme'
+
+function initialTheme(): 'light' | 'dark' {
+  try {
+    const saved = localStorage.getItem(themeKey)
+    if (saved === 'light' || saved === 'dark') return saved
+  } catch { /* The theme remains available without storage. */ }
+  return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
 function ScenarioCard({ item, active, onOpen }: { item: Scenario; active: boolean; onOpen: (id: string) => void }) {
@@ -36,11 +47,14 @@ function ScenarioCard({ item, active, onOpen }: { item: Scenario; active: boolea
 function App() {
   const [locationState, setLocationState] = useState(route)
   const [attempt, setAttempt] = useState(0)
-  const [showCategories, setShowCategories] = useState(false)
+  const [showCategories, setShowCategories] = useState(() => !matchMedia(compactLayout).matches)
+  const [theme, setTheme] = useState(initialTheme)
   const catalog = useCatalog(attempt)
   const search = useRef<HTMLInputElement>(null)
   const preview = useRef<HTMLElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
+  const categoriesToggle = useRef<HTMLButtonElement>(null)
+  const categoriesPanel = useRef<HTMLElement>(null)
   const pendingFocus = useRef(false)
   const filtering = useRef(false)
   const previousId = useRef<string | null>(locationState.id)
@@ -51,6 +65,16 @@ function App() {
   useLayoutEffect(() => {
     if (preview.current) preview.current.scrollTop = 0
   }, [selected?.id])
+
+  useLayoutEffect(() => {
+    if (categoriesPanel.current) categoriesPanel.current.inert = !showCategories
+  }, [catalog.status, showCategories])
+
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = theme
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#101b16' : '#f1f7ef')
+    try { localStorage.setItem(themeKey, theme) } catch { /* Storage can be unavailable. */ }
+  }, [theme])
 
   useEffect(() => {
     const onPop = () => setLocationState(route())
@@ -110,9 +134,15 @@ function App() {
   }
 
   useEffect(() => {
-    if (!locationState.id) return
     const escape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
+      if (showCategories && (categoriesPanel.current?.contains(document.activeElement)
+        || categoriesToggle.current === document.activeElement)) {
+        setShowCategories(false)
+        categoriesToggle.current?.focus()
+        return
+      }
+      if (!locationState.id) return
       if (history.state?.fromCatalog) history.back()
       else {
         const url = new URL(location.href)
@@ -123,7 +153,7 @@ function App() {
     }
     document.addEventListener('keydown', escape)
     return () => document.removeEventListener('keydown', escape)
-  }, [locationState.id])
+  }, [locationState.id, showCategories])
 
   const active = selected?.id
   return <>
@@ -131,7 +161,12 @@ function App() {
     <header className="header">
       <div className="shell header-inner">
         <a className="brand" href={location.pathname}><Mark/> Троеточие<span>Библиотека</span></a>
-        <a className="original" href="https://troetochie.com/scenarios/" target="_blank" rel="noreferrer">Оригинальная библиотека <ArrowUpRight size={16}/></a>
+        <div className="header-actions">
+          <a className="original" href="https://troetochie.com/scenarios/" target="_blank" rel="noreferrer">Оригинальная библиотека <ArrowUpRight size={16}/></a>
+          <button className="icon-button theme-toggle" aria-label="Тёмная тема" aria-pressed={theme === 'dark'} title={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'} onClick={() => setTheme(current => current === 'dark' ? 'light' : 'dark')}>
+            {theme === 'dark' ? <Sun size={18}/> : <Moon size={17}/>}
+          </button>
+        </div>
       </div>
     </header>
     <main id="main" className={'shell main' + (locationState.id ? ' has-open' : '')}>
@@ -148,17 +183,30 @@ function App() {
       </section>
       {catalog.status === 'loading' && <p className="state" role="status">Загружаем сценарии…</p>}
       {catalog.status === 'error' && <div className="state"><p role="alert">Не удалось загрузить сценарии.</p><button className="primary" onClick={() => setAttempt(value => value + 1)}>Повторить</button></div>}
-      {catalog.status === 'ready' && <div className="workspace">
-        <aside className="categories" aria-label="Категории">
-          <h2>Категории</h2>
-          {([null, ...categories] as const).map((category, index) => {
+      {catalog.status === 'ready' && <>
+        <div className="catalog-tools">
+          <button ref={categoriesToggle} className="category-toggle" aria-expanded={showCategories} aria-controls="scenario-categories" onClick={() => setShowCategories(value => !value)}>
+            {showCategories ? <PanelLeftClose size={17}/> : <PanelLeftOpen size={17}/>}
+            {showCategories ? 'Скрыть категории' : 'Показать категории'}
+          </button>
+        </div>
+        <div className={'workspace' + (showCategories ? ' categories-open' : '')}>
+        <aside ref={categoriesPanel} id="scenario-categories" className="categories" aria-label="Категории">
+          <div className="category-panel">
+          {([null, ...categories] as const).map(category => {
             const Icon = category ? categoryIcons[category] : Layers3
             const count = category ? items.filter(item => item.category === category).length : items.length
-            return <button className={index > 5 && !showCategories && locationState.category !== category ? 'extra-category' : undefined} aria-pressed={locationState.category === category} key={category ?? 'all'} onClick={() => filter(locationState.query, category)}>
+            return <button aria-pressed={locationState.category === category} key={category ?? 'all'} onClick={() => {
+              filter(locationState.query, category)
+              if (matchMedia(compactLayout).matches) {
+                setShowCategories(false)
+                categoriesToggle.current?.focus()
+              }
+            }}>
               <Icon size={16}/><span>{category ?? 'Все сценарии'}</span><small>{count}</small>
             </button>
           })}
-          <button className="more-categories" aria-expanded={showCategories} onClick={() => setShowCategories(value => !value)}>{showCategories ? 'Свернуть' : 'Ещё категории'} <ChevronDown size={14}/></button>
+          </div>
         </aside>
         <section className="catalog" aria-labelledby="catalog-title">
           <div className="catalog-heading"><h2 id="catalog-title">{locationState.category ?? 'Все сценарии'}</h2><span role="status">{countLabel(visible.length)}</span></div>
@@ -176,7 +224,7 @@ function App() {
             : locationState.id ? <div className="state"><h2>Сценарий не найден</h2><button className="text-button" onClick={close}>Вернуться в каталог</button></div>
               : <div className="state"><MessageSquare size={24}/><p>Здесь появится пример переписки.</p></div>}
         </section>
-      </div>}
+      </div></>}
     </main>
     <footer className="shell footer"><span>Независимый концепт интерфейса</span><a href="https://troetochie.com/scenarios/" target="_blank" rel="noreferrer">Источник сценариев <ArrowUpRight size={14}/></a></footer>
   </>
